@@ -8,7 +8,7 @@ def get_proxy_url():
     """
     Get the Groq proxy URL or default endpoint.
     """
-    return os.environ.get('GROQ_BASE_URL', 'https://api.groq.com/')
+    return os.environ.get('GROQ_BASE_URL', '')
 
 def get_proxy_headers():
     """
@@ -30,19 +30,19 @@ def map_model(model_name: str) -> str:
         "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
         "mixtral-8x7b-32768",
-        "gemma2-9b-it"
+        "openai/gpt-oss-120b"
     ]
     if model_name in groq_models or "groq" in model_name.lower():
         return model_name
     # Fallback to a high-performance Groq model
-    return "llama-3.3-70b-versatile"
+    return "openai/gpt-oss-120b"
 
 def generate_with_single_input(prompt: str,
                                role: str = 'user',
                                top_p: float = None,
                                temperature: float = None,
                                max_tokens: int = 500,
-                               model: str = "llama-3.3-70b-versatile",
+                               model: str = "openai/gpt-oss-120b",
                                together_api_key = None,
                                groq_api_key = None,
                                **kwargs):
@@ -75,7 +75,7 @@ def generate_with_single_input(prompt: str,
     if top_p is not None:
         payload["top_p"] = top_p
 
-    # Remove any Together AI specific reasoning parameter if present
+    # Remove any Groq AI specific reasoning parameter if present
     kwargs.pop("reasoning", None)
 
     # Add other kwargs
@@ -108,7 +108,7 @@ def generate_with_multiple_input(messages: List[Dict],
                                  top_p: float = None,
                                  temperature: float = None,
                                  max_tokens: int = 500,
-                                 model: str = "llama-3.3-70b-versatile",
+                                 model: str = "openai/gpt-oss-120b",
                                  together_api_key = None,
                                  groq_api_key = None,
                                  **kwargs):

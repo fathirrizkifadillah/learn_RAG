@@ -8,7 +8,10 @@ def get_proxy_url():
     """
     Get the Groq proxy URL or default endpoint.
     """
-    return os.environ.get('GROQ_BASE_URL', '')
+    base_url = os.environ.get('GROQ_BASE_URL', 'https://api.groq.com/openai/v1').rstrip('/')
+    if "api.groq.com" in base_url and not base_url.endswith("openai/v1"):
+        base_url = f"{base_url}/openai/v1"
+    return base_url
 
 def get_proxy_headers():
     """
@@ -16,9 +19,15 @@ def get_proxy_headers():
     """
     return {"Authorization": f"Bearer {os.environ.get('GROQ_API_KEY', '')}"}
 
-def get_groq_key():
+def get_together_key():
     """
     Get the API key (mapped to Groq API key).
+    """
+    return os.environ.get("GROQ_API_KEY", "")
+
+def get_groq_key():
+    """
+    Get the Groq API key from environment variables.
     """
     return os.environ.get("GROQ_API_KEY", "")
 
@@ -84,7 +93,10 @@ def generate_with_single_input(prompt: str,
     # Call Groq API
     if "GROQ_BASE_URL" in os.environ:
         # Use requests/proxy fallback if GROQ_BASE_URL is set
-        url = os.path.join(os.environ["GROQ_BASE_URL"], 'v1/chat/completions')
+        base_url = os.environ["GROQ_BASE_URL"].rstrip('/')
+        if "api.groq.com" in base_url and not base_url.endswith("openai/v1"):
+            base_url = f"{base_url}/openai/v1"
+        url = f"{base_url}/chat/completions"
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         response = requests.post(url, json=payload, headers=headers, verify=False)
         if not response.ok:
@@ -150,7 +162,10 @@ def generate_with_multiple_input(messages: List[Dict],
     # Call Groq API
     if "GROQ_BASE_URL" in os.environ:
         # Use requests/proxy fallback if GROQ_BASE_URL is set
-        url = os.path.join(os.environ["GROQ_BASE_URL"], 'v1/chat/completions')
+        base_url = os.environ["GROQ_BASE_URL"].rstrip('/')
+        if "api.groq.com" in base_url and not base_url.endswith("openai/v1"):
+            base_url = f"{base_url}/openai/v1"
+        url = f"{base_url}/chat/completions"
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         response = requests.post(url, json=payload, headers=headers, verify=False)
         if not response.ok:

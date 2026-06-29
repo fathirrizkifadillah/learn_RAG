@@ -12,7 +12,7 @@ from matplotlib.colors import ListedColormap
 from adjustText import adjust_text
 from io import BytesIO
 import base64
-from together import Together
+from groq import Groq
 
 def get_proxy_url():
     """
@@ -187,41 +187,74 @@ def display_widget(model):
     # Initial plot display
     plot_embeddings()
 
+def map_model(model_name: str) -> str:
+    """
+    Map Together AI models or other models to appropriate Groq models.
+    """
+    groq_models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768",
+        "openai/gpt-oss-120b"
+    ]
+    if model_name in groq_models or "groq" in model_name.lower():
+        return model_name
+    # Fallback to a high-performance Groq model
+    return "openai/gpt-oss-120b"
+
 def generate_with_single_input(prompt: str,
                                role: str = 'user',
                                top_p: float = None,
                                temperature: float = None,
                                max_tokens: int = 500,
-                               model: str ="Qwen/Qwen3.5-9B",
+                               model: str = "openai/gpt-oss-120b",
                                together_api_key = None,
-                              **kwargs):
+                               groq_api_key = None,
+                               **kwargs):
+    """
+    Call Groq API with a single text prompt.
+    """
+    # Map model if necessary
+    model = map_model(model)
 
-    # Remove None parameters for Together API - don't set to string 'none'
-    if top_p is None:
-        payload_top_p = None
-    else:
-        payload_top_p = top_p
-    if temperature is None:
-        payload_temperature = None
-    else:
-        payload_temperature = temperature
+    # Determine the API key to use
+    api_key = groq_api_key or together_api_key or os.environ.get("GROQ_API_KEY", "")
 
+    # Check for valid API key when running locally
+    if (not api_key or api_key == "your_groq_api_key_here") and "GROQ_BASE_URL" not in os.environ:
+        raise ValueError(
+            "Groq API key is missing or set to the placeholder ('your_groq_api_key_here').\n"
+            "Please obtain a free API key by signing up at https://console.groq.com/,\n"
+            "then open the `.env` file in this directory and replace 'your_groq_api_key_here' with your real API key.\n"
+            "After updating `.env`, restart your Jupyter notebook kernel and run the cells again."
+        )
+
+    # Remove None parameters for Groq API
     payload = {
         "model": model,
         "messages": [{'role': role, 'content': prompt}],
         "max_tokens": max_tokens,
-        "reasoning": {"enabled": False},
-        **kwargs
     }
-    # Only add temperature and top_p if they're not None
-    if payload_temperature is not None:
-        payload["temperature"] = payload_temperature
-    if payload_top_p is not None:
-        payload["top_p"] = payload_top_p
+    if temperature is not None:
+        payload["temperature"] = temperature
+    if top_p is not None:
+        payload["top_p"] = top_p
 
-    if (not together_api_key) and ('TOGETHER_API_KEY' not in os.environ):
-        url = os.path.join(get_proxy_url(), 'v1/chat/completions')
-        response = requests.post(url, json = payload, verify=False)
+    # Remove any Groq AI specific reasoning parameter if present
+    kwargs.pop("reasoning", None)
+
+    # Add other kwargs
+    payload.update(kwargs)
+
+    # Call Groq API
+    if "GROQ_BASE_URL" in os.environ:
+        # Use requests/proxy fallback if GROQ_BASE_URL is set
+        base_url = os.environ["GROQ_BASE_URL"].rstrip('/')
+        if "api.groq.com" in base_url and not base_url.endswith("openai/v1"):
+            base_url = f"{base_url}/openai/v1"
+        url = f"{base_url}/chat/completions"
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        response = requests.post(url, json=payload, headers=headers, verify=False)
         if not response.ok:
             raise Exception(f"Error while calling LLM: {response.text}")
         try:
@@ -229,12 +262,10 @@ def generate_with_single_input(prompt: str,
         except Exception as e:
             raise Exception(f"Failed to get correct output from LLM call.\nException: {e}\nResponse: {response.text}")
     else:
-        if together_api_key is None:
-            together_api_key = os.environ['TOGETHER_API_KEY']
-        from together import Together
-        client = Together(api_key =  together_api_key)
+        # Use the official Groq client
+        client = Groq(api_key=api_key)
         json_dict = client.chat.completions.create(**payload).model_dump()
-        json_dict['choices'][-1]['message']['role'] = json_dict['choices'][-1]['message']['role'].name.lower()
+
     try:
         output_dict = {'role': json_dict['choices'][-1]['message']['role'], 'content': json_dict['choices'][-1]['message']['content']}
     except Exception as e:
@@ -243,38 +274,57 @@ def generate_with_single_input(prompt: str,
 
 
 def generate_with_multiple_input(messages: List[Dict],
-                               top_p: float = None,
-                               temperature: float = None,
-                               max_tokens: int = 500,
-                               model: str ="Qwen/Qwen3.5-9B",
-                                together_api_key = None,
-                                **kwargs):
-    # Remove None parameters for Together API
-    if top_p is None:
-        payload_top_p = None
-    else:
-        payload_top_p = top_p
-    if temperature is None:
-        payload_temperature = None
-    else:
-        payload_temperature = temperature
+                                 top_p: float = None,
+                                 temperature: float = None,
+                                 max_tokens: int = 500,
+                                 model: str = "openai/gpt-oss-120b",
+                                 together_api_key = None,
+                                 groq_api_key = None,
+                                 **kwargs):
+    """
+    Call Groq API with multiple conversation messages.
+    """
+    # Map model if necessary
+    model = map_model(model)
 
+    # Determine the API key to use
+    api_key = groq_api_key or together_api_key or os.environ.get("GROQ_API_KEY", "")
+
+    # Check for valid API key when running locally
+    if (not api_key or api_key == "your_groq_api_key_here") and "GROQ_BASE_URL" not in os.environ:
+        raise ValueError(
+            "Groq API key is missing or set to the placeholder ('your_groq_api_key_here').\n"
+            "Please obtain a free API key by signing up at https://console.groq.com/,\n"
+            "then open the `.env` file in this directory and replace 'your_groq_api_key_here' with your real API key.\n"
+            "After updating `.env`, restart your Jupyter notebook kernel and run the cells again."
+        )
+
+    # Remove None parameters for Groq API
     payload = {
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
-        "reasoning": {"enabled": False},
-        **kwargs
     }
-    # Only add temperature and top_p if they're not None
-    if payload_temperature is not None:
-        payload["temperature"] = payload_temperature
-    if payload_top_p is not None:
-        payload["top_p"] = payload_top_p
+    if temperature is not None:
+        payload["temperature"] = temperature
+    if top_p is not None:
+        payload["top_p"] = top_p
 
-    if (not together_api_key) and ('TOGETHER_API_KEY' not in os.environ):
-        url = os.path.join(get_proxy_url(), 'v1/chat/completions')
-        response = requests.post(url, json = payload, verify=False)
+    # Remove any Together AI specific reasoning parameter if present
+    kwargs.pop("reasoning", None)
+
+    # Add other kwargs
+    payload.update(kwargs)
+
+    # Call Groq API
+    if "GROQ_BASE_URL" in os.environ:
+        # Use requests/proxy fallback if GROQ_BASE_URL is set
+        base_url = os.environ["GROQ_BASE_URL"].rstrip('/')
+        if "api.groq.com" in base_url and not base_url.endswith("openai/v1"):
+            base_url = f"{base_url}/openai/v1"
+        url = f"{base_url}/chat/completions"
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        response = requests.post(url, json=payload, headers=headers, verify=False)
         if not response.ok:
             raise Exception(f"Error while calling LLM: {response.text}")
         try:
@@ -282,12 +332,10 @@ def generate_with_multiple_input(messages: List[Dict],
         except Exception as e:
             raise Exception(f"Failed to get correct output from LLM call.\nException: {e}\nResponse: {response.text}")
     else:
-        if together_api_key is None:
-            together_api_key = os.environ['TOGETHER_API_KEY']
-        from together import Together
-        client = Together(api_key =  together_api_key)
+        # Use the official Groq client
+        client = Groq(api_key=api_key)
         json_dict = client.chat.completions.create(**payload).model_dump()
-        json_dict['choices'][-1]['message']['role'] = json_dict['choices'][-1]['message']['role'].name.lower()
+
     try:
         output_dict = {'role': json_dict['choices'][-1]['message']['role'], 'content': json_dict['choices'][-1]['message']['content']}
     except Exception as e:

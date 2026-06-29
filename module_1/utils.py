@@ -19,12 +19,6 @@ def get_proxy_headers():
     """
     return {"Authorization": f"Bearer {os.environ.get('GROQ_API_KEY', '')}"}
 
-def get_together_key():
-    """
-    Get the API key (mapped to Groq API key).
-    """
-    return os.environ.get("GROQ_API_KEY", "")
-
 def get_groq_key():
     """
     Get the Groq API key from environment variables.

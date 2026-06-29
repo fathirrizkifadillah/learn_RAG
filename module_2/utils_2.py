@@ -16,24 +16,24 @@ from together import Together
 
 def get_proxy_url():
     """
-    Get the proxy URL from environment variable or fall back to Together.ai endpoint.
-    Uses TOGETHER_BASE_URL environment variable set in Dockerfile.
-    Defaults to https://api.together.xyz/ if not set.
+    Get the Groq proxy URL or default endpoint.
     """
-    return os.environ.get('TOGETHER_BASE_URL', 'https://api.together.xyz/')
+    base_url = os.environ.get('GROQ_BASE_URL', 'https://api.groq.com/openai/v1').rstrip('/')
+    if "api.groq.com" in base_url and not base_url.endswith("openai/v1"):
+        base_url = f"{base_url}/openai/v1"
+    return base_url
 
 def get_proxy_headers():
     """
-    Get the appropriate headers for API calls based on the platform.
-    Returns Authorization header with Together API key if available.
+    Get appropriate headers for API calls.
     """
-    return {"Authorization": os.environ.get("TOGETHER_API_KEY", "")}
+    return {"Authorization": f"Bearer {os.environ.get('GROQ_API_KEY', '')}"}
 
-def get_together_key():
+def get_groq_key():
     """
-    Get the Together API key from environment variables.
+    Get the API key (mapped to Groq API key).
     """
-    return os.environ.get("TOGETHER_API_KEY", "")
+    return os.environ.get("GROQ_API_KEY", "")
 
 def plot_vectors():
     # Define vectors

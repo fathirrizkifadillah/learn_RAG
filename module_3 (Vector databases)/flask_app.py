@@ -9,7 +9,11 @@ import logging
 import os
 from utils import generate_embedding
 # Initialize models globally to load them once
-reranker = FlagReranker('BAAI/bge-reranker-base', cache_dir=os.environ["MODEL_M3"], use_fp16=False)
+reranker = FlagReranker(
+    'BAAI/bge-reranker-base',
+    cache_dir=os.environ.get("MODEL_M3", os.path.join(os.path.dirname(__file__), ".models")),
+    use_fp16=False
+)
 
 app = Flask(__name__)
 
@@ -84,25 +88,48 @@ def rerank():
 @app.route('/vectors', methods=['POST']) 
 def vectorize():
     try:
-        try:
-            data = request.json.get('text')
-        except Exception as e:
+        # Get JSON data from request
+        data = request.get_json(force=True, silent=True)
+        if data is None:
             try:
-                data = request.data.decode("utf-8")
+                data = json.loads(request.data.decode("utf-8"))
             except Exception as e:
-                print(e)
-        text = json.loads(data)
+                return jsonify({'error': f"Could not parse request body: {e}"}), 400
+
+        if not isinstance(data, dict) or 'text' not in data:
+            return jsonify({'error': "Invalid input format. Expected a dictionary with 'text'."}), 400
+
+        text = data['text']
+
+        # Support both single string input and list of strings input
         if isinstance(text, str):
-            text = [text]
+            embeddings = generate_embedding(text)
+            return jsonify({
+                'text': text,
+                'vector': embeddings,
+                'dim': len(embeddings)
+            })
+        elif isinstance(text, list):
+            if len(text) == 1:
+                single_text = text[0]
+                embeddings = generate_embedding(single_text)
+                return jsonify({
+                    'text': single_text,
+                    'vector': embeddings,
+                    'dim': len(embeddings)
+                })
+            else:
+                embeddings = generate_embedding(text)
+                return jsonify({
+                    'text': text,
+                    'vector': embeddings,
+                    'dim': len(embeddings[0]) if embeddings else 0
+                })
         else:
-            text =text['text']
-            
-        embeddings = generate_embedding(text)
-
-        return jsonify({'vector': embeddings})
-
+            return jsonify({'error': "'text' must be a string or a list of strings."}), 400
 
     except Exception as e:
+        print(f"Unhandled error in /vectors: {e}")
         return jsonify({'error': str(e)}), 500
     
 app.logger.disabled = True
